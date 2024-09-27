@@ -3,27 +3,28 @@ import aiohttp
 import itertools
 
 from models import Kline as KlineModel
-from stock_exchange.stock_exchange import Bybit, Binance, Kucoin
+from src.notification_provider.notification_provider import NotificationProvider
+from src.stock_exchange.stock_exchange import StockExchange
 from stock_exchange.util import Kline
 
 
 class Manager:
-    exchanges = [Kucoin(symbols=['BTC-USDT', 'ETH-BTC']),
-                 Bybit(symbols=['BTCUSDT', 'ETHBTC']),
-                 Binance(symbols=['BTCUSDT', 'ETHBTC', 'DOGEBTC', 'SOLBTC'])]
-    job_interval = None
-    notification_threshold = 0.03
-    bitcoin_amount = 3
 
-    @staticmethod
-    async def fetch_klines() -> list[Kline]:
+    def __init__(self, exchanges: list[StockExchange], job_interval: int, bitcoin_amount: float,
+                 notify_provider: NotificationProvider):
+        self.exchanges = exchanges
+        self.job_interval = job_interval
+        self.bitcoin_amount = bitcoin_amount
+        self.notify_provider = notify_provider
+
+    async def fetch_klines(self) -> list[Kline]:
         async with aiohttp.ClientSession() as client:
-            for stock_exchange in Manager.exchanges:
+            for stock_exchange in self.exchanges:
                 stock_exchange.client = client
             tasks = []
             async with asyncio.TaskGroup() as tg:
-                for stock_exchange in Manager.exchanges:
-                    task = tg.create_task(stock_exchange.get_klines(interval_min=Manager.job_interval))
+                for stock_exchange in self.exchanges:
+                    task = tg.create_task(stock_exchange.get_klines(interval_min=self.job_interval))
                     tasks.append(task)
             klines = list(itertools.chain(*[task.result() for task in tasks]))
             return klines
@@ -40,11 +41,7 @@ class Manager:
                                                  min_price=kline.min_price,
                                                  percent_diff=kline.exchange_rate) for kline in klines])
 
-    @staticmethod
-    async def notify_user(klines: list[Kline]) -> None:
-        pass
-
-    @staticmethod
-    async def job():
-        klines = await Manager.fetch_klines()
+    async def job(self) -> None:
+        klines = await self.fetch_klines()
+        self.notify_provider.send_notification(klines, self.bitcoin_amount)
         await Manager.save_klines_to_db(klines)
