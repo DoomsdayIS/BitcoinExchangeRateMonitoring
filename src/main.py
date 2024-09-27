@@ -43,7 +43,8 @@ async def main():
                               notify_provider=EmailNotification(notification_threshold=0.03,
                                                                 email_address=EMAIL_ADDRESS,
                                                                 email_password=EMAIL_PASSWORD,
-                                                                contacts=[EMAIL_ADDRESS]))
+                                                                contacts=[EMAIL_ADDRESS],
+                                                                test_mode=True if notification_type == 'c' else False))
             break
         except (TypeError, ValueError):
             print("Please try again")

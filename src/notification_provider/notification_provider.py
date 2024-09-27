@@ -1,14 +1,15 @@
+import asyncio
+import json
+import os
 import smtplib
+
+from abc import ABCMeta, abstractmethod
+from aiosmtpd.controller import Controller
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
-from aiosmtpd.controller import Controller
-import asyncio
-import json
-from aiosmtpd.smtp import SMTP as Server, syntax
-from abc import ABCMeta, abstractmethod
+
+from src.notification_provider.util import DefaultHandler
 from src.stock_exchange.util import Kline
 
 
@@ -23,11 +24,12 @@ class NotificationProvider(metaclass=ABCMeta):
 
 class EmailNotification(NotificationProvider):
 
-    def __init__(self, notification_threshold: float, email_address: str, email_password: str, contacts: list[str]):
+    def __init__(self, notification_threshold: float, email_address: str, email_password: str, contacts: list[str], test_mode: bool):
         super().__init__(notification_threshold)
         self.email_address = email_address
         self.email_password = email_password
         self.contacts = contacts
+        self.test_mode = test_mode
 
     @staticmethod
     def _add_info_to_dict(kline_dict: dict, kline: Kline, bitcoin_amount: float):
@@ -74,6 +76,14 @@ class EmailNotification(NotificationProvider):
         kline_info['datetime'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         kline_info['interval'] = klines[0].kline_interval
         msg = self._create_message(kline_info)
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(self.email_address, self.email_password)
-            smtp.sendmail(self.email_address, self.contacts, msg.as_string())
+        if self.test_mode:
+            controller = Controller(DefaultHandler())
+            controller.start()
+            with smtplib.SMTP('localhost', 8025) as smtp:
+                smtp.sendmail(self.email_address, self.contacts, msg.as_string())
+            print('Successfully sent email')
+            controller.stop()
+        else:
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+                smtp.login(self.email_address, self.email_password)
+                smtp.sendmail(self.email_address, self.contacts, msg.as_string())

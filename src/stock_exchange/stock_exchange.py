@@ -1,8 +1,8 @@
 import asyncio
+import aiohttp
+
 from abc import abstractmethod, ABCMeta
 from typing import List
-
-import aiohttp
 
 from src.stock_exchange.util import Kline, create_iso_datetime, crete_integer_interval, create_trade_pairs_title
 
