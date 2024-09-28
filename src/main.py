@@ -1,5 +1,7 @@
 import asyncio
+import json
 import os
+import time
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
@@ -26,28 +28,23 @@ async def init_database():
 
 
 async def main():
-    while True:
-        try:
-            expected_frequency = int(
-                input(f"Enter request frequency: Should be an integer from {ACCEPTABLE_FREQUENCIES} (minutes)\n"))
-            current_bitcoin_amount = float(input(f"Enter current bitcoin amount:\n"))
-            notification_type = input('Select the notification type: Email(e) or Console(c). For the email type, '
-                                      'there must be environment variables SENDER_EMAIL and EMAIL_PASSWORD\n')
-            if expected_frequency not in ACCEPTABLE_FREQUENCIES and notification_type in ('e', 'c'):
-                raise ValueError
-            manager = Manager(exchanges=[Kucoin(symbols=['BTC-USDT', 'ETH-BTC']),
-                                         Bybit(symbols=['BTCUSDT', 'ETHBTC']),
-                                         Binance(symbols=['BTCUSDT', 'ETHBTC', 'DOGEBTC', 'SOLBTC'])],
-                              job_interval=expected_frequency,
-                              bitcoin_amount=current_bitcoin_amount,
-                              notify_provider=EmailNotification(notification_threshold=0.03,
-                                                                email_address=EMAIL_ADDRESS,
-                                                                email_password=EMAIL_PASSWORD,
-                                                                contacts=[EMAIL_ADDRESS],
-                                                                test_mode=True if notification_type == 'c' else False))
-            break
-        except (TypeError, ValueError):
-            print("Please try again")
+    with open('app_config.json') as config_file:
+        config = json.load(config_file)
+        expected_frequency = int(config['interval'])
+        test_mode = True if config['notification_mode'] == 'test' else False
+        bitcoin_amount = float(config['bitcoin_amount'])
+        notification_threshold = float(config['notification_threshold'])
+
+    manager = Manager(exchanges=[Kucoin(symbols=['BTC-USDT', 'ETH-BTC']),
+                                 Bybit(symbols=['BTCUSDT', 'ETHBTC']),
+                                 Binance(symbols=['BTCUSDT', 'ETHBTC', 'DOGEBTC', 'SOLBTC'])],
+                      job_interval=expected_frequency,
+                      bitcoin_amount=bitcoin_amount,
+                      notify_provider=EmailNotification(notification_threshold=notification_threshold,
+                                                        email_address=EMAIL_ADDRESS,
+                                                        email_password=EMAIL_PASSWORD,
+                                                        contacts=[EMAIL_ADDRESS],
+                                                        test_mode=test_mode))
 
     scheduler = AsyncIOScheduler()
     scheduler.add_job(manager.job, 'interval', minutes=expected_frequency)
@@ -57,7 +54,15 @@ async def main():
 
 
 if __name__ == '__main__':
-    run_async(init_database())
+    print(DATABASE_URL)
+    while True:
+        try:
+            run_async(init_database())
+            break
+        except Exception as e:
+            print('Waiting untilll a database is up...')
+            print(e)
+            time.sleep(30)
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):

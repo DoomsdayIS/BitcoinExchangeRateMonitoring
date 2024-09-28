@@ -1,0 +1,6 @@
+{
+    "interval": 1,
+    "notification_mode": "test",
+    "bitcoin_amount": 3,
+    "notification_threshold": 0.03
+}
